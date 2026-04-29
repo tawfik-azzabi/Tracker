@@ -256,28 +256,55 @@ const css = `
   .bar-track { background: var(--bg3); border-radius: 4px; height: 8px; overflow: hidden; }
   .bar-fill { height: 100%; border-radius: 4px; transition: width 0.4s ease; }
 
+  /* SWIPEABLE ROW */
+  .row-wrap {
+    position: relative;
+    margin-bottom: 8px;
+    border-radius: 12px;
+    overflow: hidden;
+  }
+  .row-delete-bg {
+    position: absolute;
+    right: 0; top: 0; bottom: 0;
+    width: 72px;
+    background: var(--red);
+    display: flex; align-items: center; justify-content: center;
+    border-radius: 12px;
+    font-size: 12px;
+    font-weight: 700;
+    color: #fff;
+    letter-spacing: 0.04em;
+    user-select: none;
+  }
   .row-item {
     background: var(--card);
     border: 1px solid var(--border);
     border-radius: 12px;
-    padding: 12px 14px;
-    margin-bottom: 8px;
+    padding: 10px 12px;
     display: flex;
     align-items: center;
-    gap: 10px;
+    gap: 8px;
+    position: relative;
+    transition: transform 0.2s ease;
+    touch-action: pan-y; /* allow vertical scroll, intercept horizontal */
+    will-change: transform;
   }
+  .row-item.swiped { transform: translateX(-72px); }
+
   .row-badge {
     font-size: 10px;
     padding: 2px 7px;
     border-radius: 20px;
     font-weight: 600;
     cursor: pointer;
+    flex-shrink: 0;
   }
   .badge-detail { background: rgba(108,99,255,0.2); color: var(--accent); }
   .badge-simple { background: var(--bg3); color: var(--muted); }
 
   .input-group {
-    display: flex; flex-direction: column; gap: 2px; min-width: 70px;
+    display: flex; flex-direction: column; gap: 2px;
+    flex-shrink: 0;
   }
   .input-micro-label {
     font-size: 9px;
@@ -291,11 +318,11 @@ const css = `
     border: 1px solid var(--border);
     color: var(--text);
     font-family: var(--font-body);
-    font-size: 16px; /* ≥16px prevents Safari auto-zoom on focus */
+    font-size: 16px;
     font-weight: 500;
     text-align: right;
-    width: 80px;
-    padding: 6px 8px;
+    width: 66px; /* fits 6 digits comfortably */
+    padding: 5px 6px;
     border-radius: 8px;
     outline: none;
     transition: border-color 0.15s;
@@ -306,13 +333,9 @@ const css = `
     border: 1px solid var(--border);
     color: var(--text);
     font-family: var(--font-body);
-    /* Visually 13px but rendered at 16px then scaled down to avoid Safari zoom */
     font-size: 16px;
-    transform: scale(0.8125); /* 13/16 = 0.8125 */
-    transform-origin: left center;
-    width: calc(100% / 0.8125); /* compensate for scale shrinkage */
-    margin-right: calc(-100% * (1 - 0.8125) / 0.8125);
     flex: 1;
+    min-width: 0; /* allows flex shrink */
     padding: 8px 10px;
     border-radius: 8px;
     outline: none;
@@ -582,6 +605,45 @@ const Icons = {
   trash: "×",
 };
 
+// ─── SWIPEABLE ROW ────────────────────────────────────────────────────────────
+function SwipeRow({ onDelete, children }) {
+  const [swiped, setSwiped] = useState(false);
+  const startX = useRef(null);
+  const rowRef = useRef(null);
+
+  function onTouchStart(e) {
+    startX.current = e.touches[0].clientX;
+  }
+
+  function onTouchEnd(e) {
+    if (startX.current === null) return;
+    const dx = e.changedTouches[0].clientX - startX.current;
+    if (dx < -40) setSwiped(true);   // swipe left → reveal delete
+    if (dx > 20)  setSwiped(false);  // swipe right → close
+    startX.current = null;
+  }
+
+  function handleDeleteClick() {
+    setSwiped(false);
+    onDelete();
+  }
+
+  return (
+    <div className="row-wrap">
+      <div className="row-delete-bg" onClick={handleDeleteClick}>Suppr.</div>
+      <div
+        ref={rowRef}
+        className={`row-item${swiped ? " swiped" : ""}`}
+        onTouchStart={onTouchStart}
+        onTouchEnd={onTouchEnd}
+        onClick={() => swiped && setSwiped(false)} // tap anywhere to close
+      >
+        {children}
+      </div>
+    </div>
+  );
+}
+
 // ─── SECTION PAGE ─────────────────────────────────────────────────────────────
 function SectionPage({ sectionKey, showType, onDetailOpen }) {
   const { data, updateItem, addItem, deleteItem, isNewMonth, prevMonthKey, inheritPrev } = useApp();
@@ -628,8 +690,7 @@ function SectionPage({ sectionKey, showType, onDetailOpen }) {
           : Number(item.reel) || 0;
 
         return (
-          <div key={item.id} className="row-item">
-            <button className="btn-delete" onClick={() => deleteItem(sectionKey, item.id)}>{Icons.trash}</button>
+          <SwipeRow key={item.id} onDelete={() => deleteItem(sectionKey, item.id)}>
             <input
               className="label-input"
               value={item.label}
@@ -674,7 +735,7 @@ function SectionPage({ sectionKey, showType, onDetailOpen }) {
                 {isDetail ? "∑" : "·"}
               </button>
             )}
-          </div>
+          </SwipeRow>
         );
       })}
       <button className="btn-add" onClick={() => addItem(sectionKey, showType)}>
