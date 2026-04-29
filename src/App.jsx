@@ -282,11 +282,11 @@ const css = `
     border-radius: 12px;
     padding: 10px 12px;
     display: flex;
-    align-items: center;
+    align-items: center; /* vertical center for all children */
     gap: 8px;
     position: relative;
     transition: transform 0.2s ease;
-    touch-action: pan-y; /* allow vertical scroll, intercept horizontal */
+    touch-action: pan-y;
     will-change: transform;
   }
   .row-item.swiped { transform: translateX(-72px); }
@@ -303,7 +303,10 @@ const css = `
   .badge-simple { background: var(--bg3); color: var(--muted); }
 
   .input-group {
-    display: flex; flex-direction: column; gap: 2px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 3px;
     flex-shrink: 0;
   }
   .input-micro-label {
@@ -312,6 +315,7 @@ const css = `
     letter-spacing: 0.06em;
     color: var(--muted);
     text-align: center;
+    line-height: 1;
   }
   .amount-input {
     background: var(--bg3);
@@ -322,10 +326,12 @@ const css = `
     font-weight: 500;
     text-align: right;
     width: 66px; /* fits 6 digits comfortably */
-    padding: 5px 6px;
+    height: 38px; /* fixed height — same as label-input */
+    padding: 0 6px;
     border-radius: 8px;
     outline: none;
     transition: border-color 0.15s;
+    box-sizing: border-box;
   }
   .amount-input:focus { border-color: var(--accent); }
   .label-input {
@@ -336,10 +342,12 @@ const css = `
     font-size: 16px;
     flex: 1;
     min-width: 0; /* allows flex shrink */
-    padding: 8px 10px;
+    height: 38px; /* fixed height — same as amount-input */
+    padding: 0 10px;
     border-radius: 8px;
     outline: none;
     transition: border-color 0.15s;
+    box-sizing: border-box;
   }
   .label-input:focus { border-color: var(--accent); }
 
