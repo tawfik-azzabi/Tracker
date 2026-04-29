@@ -1,4 +1,11 @@
-import { useState, useEffect, useContext, createContext, useReducer, useCallback } from "react";
+import { useState, useEffect, useContext, createContext, useRef } from "react";
+import { createClient } from "@supabase/supabase-js";
+
+// ─── SUPABASE CONFIG ──────────────────────────────────────────────────────────
+// Ces valeurs viennent de ton fichier .env (injectées par Vite au build)
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
+const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
+const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 // ─── THEME & STYLES ────────────────────────────────────────────────────────────
 const css = `
@@ -39,7 +46,6 @@ const css = `
     background: var(--bg);
   }
 
-  /* SCROLLABLE CONTENT */
   .page {
     flex: 1;
     overflow-y: auto;
@@ -47,7 +53,6 @@ const css = `
     -webkit-overflow-scrolling: touch;
   }
 
-  /* MONTH SELECTOR */
   .month-bar {
     display: flex;
     align-items: center;
@@ -78,7 +83,24 @@ const css = `
   }
   .month-nav-btn:active { background: var(--accent); }
 
-  /* BOTTOM NAV */
+  /* SYNC STATUS */
+  .sync-dot {
+    width: 7px; height: 7px;
+    border-radius: 50%;
+    display: inline-block;
+    margin-right: 5px;
+    transition: background 0.3s;
+  }
+  .sync-ok { background: var(--green); }
+  .sync-pending { background: var(--yellow); animation: pulse 1s infinite; }
+  .sync-error { background: var(--red); }
+  .sync-label { font-size: 10px; color: var(--muted); display: flex; align-items: center; }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.3; }
+  }
+
   .bottom-nav {
     position: fixed;
     bottom: 0; left: 50%;
@@ -110,7 +132,6 @@ const css = `
   .nav-dot { width: 4px; height: 4px; border-radius: 2px; background: var(--accent); opacity: 0; transition: opacity 0.15s; }
   .nav-item.active .nav-dot { opacity: 1; }
 
-  /* CARDS */
   .card {
     background: var(--card);
     border: 1px solid var(--border);
@@ -127,18 +148,7 @@ const css = `
     color: var(--muted);
     margin-bottom: 8px;
   }
-  .card-value {
-    font-family: var(--font-head);
-    font-size: 26px;
-    font-weight: 800;
-  }
-  .card-sub {
-    font-size: 12px;
-    color: var(--muted);
-    margin-top: 4px;
-  }
 
-  /* DASHBOARD GRID */
   .dash-grid {
     display: grid;
     grid-template-columns: 1fr 1fr;
@@ -182,7 +192,6 @@ const css = `
   .pill-red { background: rgba(255,107,107,0.15); color: var(--red); }
   .pill-yellow { background: rgba(247,183,49,0.15); color: var(--yellow); }
 
-  /* BAR CHART */
   .chart-wrap { margin-bottom: 16px; }
   .chart-title {
     font-family: var(--font-head);
@@ -198,19 +207,6 @@ const css = `
   .bar-track { background: var(--bg3); border-radius: 4px; height: 8px; overflow: hidden; }
   .bar-fill { height: 100%; border-radius: 4px; transition: width 0.4s ease; }
 
-  /* SECTION HEADER */
-  .section-header {
-    display: flex; align-items: center; justify-content: space-between;
-    margin-bottom: 12px;
-  }
-  .section-title {
-    font-family: var(--font-head);
-    font-size: 16px;
-    font-weight: 700;
-  }
-  .section-totals { font-size: 11px; color: var(--muted); text-align: right; line-height: 1.5; }
-
-  /* ROW ITEMS */
   .row-item {
     background: var(--card);
     border: 1px solid var(--border);
@@ -221,7 +217,6 @@ const css = `
     align-items: center;
     gap: 10px;
   }
-  .row-label { flex: 1; font-size: 14px; font-weight: 500; }
   .row-badge {
     font-size: 10px;
     padding: 2px 7px;
@@ -232,7 +227,6 @@ const css = `
   .badge-detail { background: rgba(108,99,255,0.2); color: var(--accent); }
   .badge-simple { background: var(--bg3); color: var(--muted); }
 
-  /* INPUTS */
   .input-group {
     display: flex; flex-direction: column; gap: 2px; min-width: 70px;
   }
@@ -272,7 +266,6 @@ const css = `
   }
   .label-input:focus { border-color: var(--accent); }
 
-  /* BUTTONS */
   .btn-add {
     width: 100%;
     background: var(--bg3);
@@ -312,18 +305,7 @@ const css = `
     cursor: pointer;
     letter-spacing: 0.04em;
   }
-  .btn-icon {
-    background: var(--bg3);
-    border: 1px solid var(--border);
-    color: var(--text);
-    width: 36px; height: 36px;
-    border-radius: 10px;
-    font-size: 16px;
-    cursor: pointer;
-    display: flex; align-items: center; justify-content: center;
-  }
 
-  /* TOTALS BAR */
   .totals-bar {
     background: var(--bg2);
     border: 1px solid var(--border);
@@ -337,7 +319,6 @@ const css = `
   .totals-val { font-family: var(--font-head); font-size: 15px; font-weight: 700; }
   .totals-lbl { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; margin-top: 2px; }
 
-  /* DETAIL PAGE */
   .back-btn {
     display: flex; align-items: center; gap: 8px;
     background: none; border: none; color: var(--accent);
@@ -354,11 +335,7 @@ const css = `
     align-items: center;
     gap: 10px;
   }
-  .log-date {
-    font-size: 11px;
-    color: var(--muted);
-    white-space: nowrap;
-  }
+  .log-date { font-size: 11px; color: var(--muted); white-space: nowrap; }
   .log-desc { flex: 1; font-size: 13px; }
   .log-amount { font-family: var(--font-head); font-size: 15px; font-weight: 700; color: var(--accent2); }
 
@@ -374,7 +351,6 @@ const css = `
   }
   .form-row { display: flex; gap: 8px; align-items: center; }
 
-  /* SOLDE CARD */
   .solde-card {
     background: linear-gradient(135deg, #1e2046 0%, #2a1e46 100%);
     border: 1px solid rgba(108,99,255,0.3);
@@ -383,7 +359,6 @@ const css = `
     margin-bottom: 16px;
   }
 
-  /* EXPORT BTN */
   .export-btn {
     background: var(--bg3);
     border: 1px solid var(--border);
@@ -396,19 +371,35 @@ const css = `
     display: flex; align-items: center; gap: 6px;
   }
 
-  /* SCROLLBAR */
+  /* LOADING SCREEN */
+  .loading-screen {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100vh;
+    gap: 16px;
+    background: var(--bg);
+  }
+  .spinner {
+    width: 36px; height: 36px;
+    border: 3px solid var(--border);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .loading-text { font-size: 13px; color: var(--muted); }
+
   ::-webkit-scrollbar { width: 4px; }
   ::-webkit-scrollbar-track { background: transparent; }
   ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
 
-  /* ANIMATIONS */
   @keyframes fadeUp {
     from { opacity: 0; transform: translateY(12px); }
     to { opacity: 1; transform: translateY(0); }
   }
   .fade-up { animation: fadeUp 0.25s ease both; }
-
-  /* EMPTY STATE */
   .empty { text-align: center; color: var(--muted); padding: 32px 0; font-size: 13px; }
 `;
 
@@ -450,44 +441,58 @@ const CATEGORIES_TEMPLATE = {
   ],
 };
 
-const toKey = (y, m) => `budget_${y}_${String(m + 1).padStart(2, "0")}`;
+const toKey = (y, m) => `${y}-${String(m + 1).padStart(2, "0")}`;
 const deepClone = (obj) => JSON.parse(JSON.stringify(obj));
 
 function createMonth() {
   return deepClone(CATEGORIES_TEMPLATE);
 }
 
-function loadMonth(year, month) {
-  const key = toKey(year, month);
-  const raw = localStorage.getItem(key);
-  if (raw) return JSON.parse(raw);
-  return createMonth();
+// localStorage comme cache local (fallback offline)
+function localLoad(year, month) {
+  const raw = localStorage.getItem(`budget_${toKey(year, month)}`);
+  return raw ? JSON.parse(raw) : null;
 }
-
-function saveMonth(year, month, data) {
-  localStorage.setItem(toKey(year, month), JSON.stringify(data));
+function localSave(year, month, data) {
+  localStorage.setItem(`budget_${toKey(year, month)}`, JSON.stringify(data));
 }
 
 function uid() {
   return Math.random().toString(36).slice(2, 9);
 }
 
+// ─── SUPABASE HELPERS ─────────────────────────────────────────────────────────
+async function dbLoad(year, month) {
+  const { data, error } = await supabase
+    .from("budget_months")
+    .select("data")
+    .eq("month_key", toKey(year, month))
+    .single();
+
+  if (error || !data) return null;
+  return data.data;
+}
+
+async function dbSave(year, month, payload) {
+  const month_key = toKey(year, month);
+  const { error } = await supabase
+    .from("budget_months")
+    .upsert({ month_key, data: payload }, { onConflict: "month_key" });
+  if (error) throw error;
+}
+
 // ─── CONTEXT ──────────────────────────────────────────────────────────────────
 const AppCtx = createContext(null);
-
-function useApp() {
-  return useContext(AppCtx);
-}
+function useApp() { return useContext(AppCtx); }
 
 // ─── FORMATTERS ───────────────────────────────────────────────────────────────
 const fmt = (n) => {
   if (!n && n !== 0) return "—";
   return Number(n).toLocaleString("fr-MA", { maximumFractionDigits: 0 }) + " MAD";
 };
-
 const MONTHS_FR = ["Janvier","Février","Mars","Avril","Mai","Juin","Juillet","Août","Septembre","Octobre","Novembre","Décembre"];
 
-// ─── TOTALS HELPERS ───────────────────────────────────────────────────────────
+// ─── TOTALS ───────────────────────────────────────────────────────────────────
 function sumSection(items) {
   const budget = items.reduce((s, i) => s + (Number(i.budget) || 0), 0);
   const reel = items.reduce((s, i) => {
@@ -513,49 +518,18 @@ function calcSolde(data) {
 
 // ─── ICONS ────────────────────────────────────────────────────────────────────
 const Icons = {
-  dashboard: (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-      <rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/>
-      <rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>
-    </svg>
-  ),
-  revenus: (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-      <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
-    </svg>
-  ),
-  factures: (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-      <polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/>
-      <line x1="8" y1="17" x2="16" y2="17"/>
-    </svg>
-  ),
-  depenses: (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-      <circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/>
-      <path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/>
-    </svg>
-  ),
-  epargne: (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-      <path d="M12 2a7 7 0 0 1 7 7v1h1a1 1 0 0 1 1 1v3a1 1 0 0 1-1 1h-1v1a3 3 0 0 1-3 3H8a3 3 0 0 1-3-3v-1H4a1 1 0 0 1-1-1v-3a1 1 0 0 1 1-1h1V9a7 7 0 0 1 7-7z"/>
-      <path d="M15 11h.01M9 11h.01"/>
-    </svg>
-  ),
-  dettes: (
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-      <path d="M3 3h18v4H3z"/><path d="M21 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7"/>
-      <path d="M9 7v10M15 7v10"/>
-    </svg>
-  ),
+  dashboard: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>,
+  revenus: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>,
+  factures: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="16" y2="17"/></svg>,
+  depenses: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="9" cy="21" r="1"/><circle cx="20" cy="21" r="1"/><path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"/></svg>,
+  epargne: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M12 2a7 7 0 0 1 7 7v1h1a1 1 0 0 1 1 1v3a1 1 0 0 1-1 1h-1v1a3 3 0 0 1-3 3H8a3 3 0 0 1-3-3v-1H4a1 1 0 0 1-1-1v-3a1 1 0 0 1 1-1h1V9a7 7 0 0 1 7-7z"/></svg>,
+  dettes: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M3 3h18v4H3z"/><path d="M21 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7"/><path d="M9 7v10M15 7v10"/></svg>,
   back: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M19 12H5M5 12l7-7M5 12l7 7"/></svg>,
-  plus: "+",
   trash: "×",
 };
 
-// ─── REUSABLE SECTION COMPONENT ───────────────────────────────────────────────
-function SectionPage({ title, sectionKey, showType, onDetailOpen }) {
+// ─── SECTION PAGE ─────────────────────────────────────────────────────────────
+function SectionPage({ sectionKey, showType, onDetailOpen }) {
   const { data, updateItem, addItem, deleteItem } = useApp();
   const items = data[sectionKey] || [];
   const { budget: totalB, reel: totalR } = sumSection(items);
@@ -589,9 +563,7 @@ function SectionPage({ title, sectionKey, showType, onDetailOpen }) {
 
         return (
           <div key={item.id} className="row-item">
-            <button className="btn-delete" onClick={() => deleteItem(sectionKey, item.id)}>
-              {Icons.trash}
-            </button>
+            <button className="btn-delete" onClick={() => deleteItem(sectionKey, item.id)}>{Icons.trash}</button>
             <input
               className="label-input"
               value={item.label}
@@ -632,7 +604,6 @@ function SectionPage({ title, sectionKey, showType, onDetailOpen }) {
               <button
                 className={`row-badge ${isDetail ? "badge-detail" : "badge-simple"}`}
                 onClick={() => updateItem(sectionKey, item.id, { type: isDetail ? "simple" : "detail", logs: isDetail ? undefined : [] })}
-                title="Changer type"
               >
                 {isDetail ? "∑" : "·"}
               </button>
@@ -647,9 +618,9 @@ function SectionPage({ title, sectionKey, showType, onDetailOpen }) {
   );
 }
 
-// ─── DETAIL PAGE (sub-expenses log) ───────────────────────────────────────────
+// ─── DETAIL PAGE ──────────────────────────────────────────────────────────────
 function DetailPage({ item, onBack }) {
-  const { data, updateItem } = useApp();
+  const { updateItem } = useApp();
   const sectionKey = "depenses";
   const [desc, setDesc] = useState("");
   const [amount, setAmount] = useState("");
@@ -663,8 +634,7 @@ function DetailPage({ item, onBack }) {
     const newLog = { id: uid(), date, amount: Number(amount), desc };
     const updatedLogs = [...logs, newLog].sort((a, b) => a.date.localeCompare(b.date));
     updateItem(sectionKey, item.id, { logs: updatedLogs });
-    setAmount("");
-    setDesc("");
+    setAmount(""); setDesc("");
   }
 
   function deleteLog(logId) {
@@ -673,10 +643,7 @@ function DetailPage({ item, onBack }) {
 
   return (
     <div className="fade-up">
-      <button className="back-btn" onClick={onBack}>
-        {Icons.back} Retour
-      </button>
-
+      <button className="back-btn" onClick={onBack}>{Icons.back} Retour</button>
       <div className="solde-card" style={{ marginBottom: 16 }}>
         <div style={{ fontSize: 11, color: "var(--muted)", textTransform: "uppercase", letterSpacing: "0.08em", marginBottom: 4 }}>
           {item.label} — Total réel
@@ -685,7 +652,10 @@ function DetailPage({ item, onBack }) {
           {fmt(total)}
         </div>
         <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 4 }}>
-          Budget prévu : {fmt(item.budget)} &nbsp;·&nbsp; Écart : <span style={{ color: Number(item.budget) - total >= 0 ? "var(--green)" : "var(--red)" }}>{fmt(Number(item.budget) - total)}</span>
+          Budget prévu : {fmt(item.budget)} · Écart :{" "}
+          <span style={{ color: Number(item.budget) - total >= 0 ? "var(--green)" : "var(--red)" }}>
+            {fmt(Number(item.budget) - total)}
+          </span>
         </div>
       </div>
 
@@ -694,36 +664,18 @@ function DetailPage({ item, onBack }) {
           Nouvelle dépense
         </div>
         <div className="form-row">
-          <input
-            type="date"
-            className="label-input"
-            style={{ maxWidth: 140 }}
-            value={date}
-            onChange={(e) => setDate(e.target.value)}
-          />
-          <input
-            type="number"
-            className="amount-input"
-            placeholder="Montant"
-            value={amount}
-            onChange={(e) => setAmount(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && addLog()}
-          />
+          <input type="date" className="label-input" style={{ maxWidth: 140 }} value={date} onChange={(e) => setDate(e.target.value)} />
+          <input type="number" className="amount-input" placeholder="Montant" value={amount}
+            onChange={(e) => setAmount(e.target.value)} onKeyDown={(e) => e.key === "Enter" && addLog()} />
         </div>
         <div className="form-row">
-          <input
-            className="label-input"
-            placeholder="Description (optionnel)"
-            value={desc}
-            onChange={(e) => setDesc(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && addLog()}
-          />
+          <input className="label-input" placeholder="Description (optionnel)" value={desc}
+            onChange={(e) => setDesc(e.target.value)} onKeyDown={(e) => e.key === "Enter" && addLog()} />
           <button className="btn-primary" onClick={addLog}>+</button>
         </div>
       </div>
 
       {logs.length === 0 && <div className="empty">Aucune dépense enregistrée</div>}
-
       {[...logs].reverse().map((log) => (
         <div key={log.id} className="log-item">
           <span className="log-date">{log.date}</span>
@@ -738,7 +690,7 @@ function DetailPage({ item, onBack }) {
 
 // ─── DASHBOARD ────────────────────────────────────────────────────────────────
 function Dashboard() {
-  const { data, year, month, exportCSV, resetMonth } = useApp();
+  const { data, exportCSV, resetMonth, syncStatus } = useApp();
   const rev = sumSection(data.revenus);
   const fac = sumSection(data.factures);
   const dep = sumSection(data.depenses);
@@ -753,12 +705,16 @@ function Dashboard() {
     { label: "Épargne", budget: epa.budget, reel: epa.reel, color: "var(--yellow)" },
     { label: "Dettes", budget: det.budget, reel: det.reel, color: "var(--red)" },
   ];
-
   const maxVal = Math.max(...sections.map((s) => Math.max(s.budget, s.reel)), 1);
+
+  const syncInfo = {
+    ok: { cls: "sync-ok", label: "Synchronisé ✓" },
+    pending: { cls: "sync-pending", label: "Synchronisation…" },
+    error: { cls: "sync-error", label: "Hors ligne — données locales" },
+  }[syncStatus];
 
   return (
     <div className="fade-up">
-      {/* SOLDE CARD */}
       <div className="solde-card">
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
           <div>
@@ -771,6 +727,10 @@ function Dashboard() {
             <div style={{ fontSize: 12, color: "rgba(255,255,255,0.4)", marginTop: 4 }}>
               Prévisionnel : {fmt(solde.budget)}
             </div>
+            <div className="sync-label" style={{ marginTop: 8 }}>
+              <span className={`sync-dot ${syncInfo.cls}`} />
+              {syncInfo.label}
+            </div>
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
             <button className="export-btn" onClick={exportCSV}>📥 CSV</button>
@@ -779,7 +739,6 @@ function Dashboard() {
         </div>
       </div>
 
-      {/* CARDS GRID */}
       <div className="dash-grid">
         {sections.slice(0, 4).map((s) => (
           <div className="dash-card" key={s.label}>
@@ -798,7 +757,6 @@ function Dashboard() {
         <div className="dash-card-prev">Prévu {fmt(det.budget)}</div>
       </div>
 
-      {/* BAR CHART */}
       <div className="card chart-wrap">
         <div className="chart-title">Prévisionnel vs Réel</div>
         {sections.map((s) => (
@@ -819,12 +777,10 @@ function Dashboard() {
         ))}
         <div style={{ display: "flex", gap: 16, marginTop: 10 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 11, color: "var(--muted)" }}>
-            <div style={{ width: 20, height: 6, background: "var(--border)", borderRadius: 3 }} />
-            Prévisionnel
+            <div style={{ width: 20, height: 6, background: "var(--border)", borderRadius: 3 }} /> Prévisionnel
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 11, color: "var(--muted)" }}>
-            <div style={{ width: 20, height: 6, background: "var(--accent)", borderRadius: 3 }} />
-            Réel
+            <div style={{ width: 20, height: 6, background: "var(--accent)", borderRadius: 3 }} /> Réel
           </div>
         </div>
       </div>
@@ -835,28 +791,17 @@ function Dashboard() {
 // ─── DEPENSES PAGE ─────────────────────────────────────────────────────────────
 function DepensesPage() {
   const [detailItem, setDetailItem] = useState(null);
-
   if (detailItem) {
-    return (
-      <div className="page">
-        <DetailPage item={detailItem} onBack={() => setDetailItem(null)} />
-      </div>
-    );
+    return <div className="page"><DetailPage item={detailItem} onBack={() => setDetailItem(null)} /></div>;
   }
-
   return (
     <div className="page">
-      <SectionPage
-        title="Dépenses"
-        sectionKey="depenses"
-        showType={true}
-        onDetailOpen={(item) => setDetailItem(item)}
-      />
+      <SectionPage sectionKey="depenses" showType={true} onDetailOpen={(item) => setDetailItem(item)} />
     </div>
   );
 }
 
-// ─── MAIN APP ─────────────────────────────────────────────────────────────────
+// ─── TABS ─────────────────────────────────────────────────────────────────────
 const TABS = [
   { key: "dashboard", label: "Tableau", icon: Icons.dashboard },
   { key: "revenus", label: "Revenus", icon: Icons.revenus },
@@ -866,42 +811,78 @@ const TABS = [
   { key: "dettes", label: "Dettes", icon: Icons.dettes },
 ];
 
+// ─── MAIN APP ─────────────────────────────────────────────────────────────────
 export default function App() {
   const now = new Date();
   const [year, setYear] = useState(now.getFullYear());
   const [month, setMonth] = useState(now.getMonth());
   const [tab, setTab] = useState("dashboard");
-  const [data, setData] = useState(() => loadMonth(now.getFullYear(), now.getMonth()));
+  const [data, setData] = useState(null); // null = loading
+  const [syncStatus, setSyncStatus] = useState("ok"); // ok | pending | error
+  const saveTimer = useRef(null);
 
-  // Persist on change
-  useEffect(() => {
-    saveMonth(year, month, data);
-  }, [data, year, month]);
-
-  // Load when month changes
-  function changeMonth(dir) {
-    let newM = month + dir;
-    let newY = year;
-    if (newM < 0) { newM = 11; newY--; }
-    if (newM > 11) { newM = 0; newY++; }
-    setMonth(newM);
-    setYear(newY);
-    setData(loadMonth(newY, newM));
+  // ── Load on mount and month change ─────────────────────────────────────────
+  async function loadData(y, m) {
+    setData(null); // show spinner
+    // 1. Try Supabase first
+    try {
+      const remote = await dbLoad(y, m);
+      if (remote) {
+        localSave(y, m, remote); // update local cache
+        setData(remote);
+        setSyncStatus("ok");
+        return;
+      }
+    } catch (e) {
+      console.warn("Supabase load failed, falling back to local:", e);
+      setSyncStatus("error");
+    }
+    // 2. Fallback: localStorage
+    const local = localLoad(y, m);
+    setData(local || createMonth());
   }
 
+  useEffect(() => { loadData(year, month); }, [year, month]);
+
+  // ── Debounced save — fires 1.5s after last change ──────────────────────────
+  useEffect(() => {
+    if (!data) return;
+    localSave(year, month, data); // instant local save
+
+    setSyncStatus("pending");
+    if (saveTimer.current) clearTimeout(saveTimer.current);
+    saveTimer.current = setTimeout(async () => {
+      try {
+        await dbSave(year, month, data);
+        setSyncStatus("ok");
+      } catch (e) {
+        console.error("Supabase save failed:", e);
+        setSyncStatus("error");
+      }
+    }, 1500);
+
+    return () => clearTimeout(saveTimer.current);
+  }, [data]);
+
+  // ── Month nav ───────────────────────────────────────────────────────────────
+  function changeMonth(dir) {
+    let newM = month + dir, newY = year;
+    if (newM < 0) { newM = 11; newY--; }
+    if (newM > 11) { newM = 0; newY++; }
+    setMonth(newM); setYear(newY);
+  }
+
+  // ── Data mutators ───────────────────────────────────────────────────────────
   function updateItem(section, id, patch) {
-    setData((prev) => {
-      const items = prev[section].map((item) => {
-        if (item.id !== id) return item;
-        return { ...item, ...patch };
-      });
-      return { ...prev, [section]: items };
-    });
+    setData((prev) => ({
+      ...prev,
+      [section]: prev[section].map((item) => item.id !== id ? item : { ...item, ...patch }),
+    }));
   }
 
   function addItem(section, withType) {
     const newItem = { id: uid(), label: "", budget: 0, reel: 0 };
-    if (withType) { newItem.type = "simple"; }
+    if (withType) newItem.type = "simple";
     setData((prev) => ({ ...prev, [section]: [...prev[section], newItem] }));
   }
 
@@ -911,16 +892,14 @@ export default function App() {
 
   function resetMonth() {
     if (window.confirm(`Réinitialiser ${MONTHS_FR[month]} ${year} ?`)) {
-      const fresh = createMonth();
-      setData(fresh);
-      saveMonth(year, month, fresh);
+      setData(createMonth());
     }
   }
 
   function exportCSV() {
     const rows = [["Section", "Intitulé", "Prévisionnel", "Réel"]];
-    const sections = { revenus: "Revenus", factures: "Factures", depenses: "Dépenses", epargne: "Épargne", dettes: "Dettes" };
-    for (const [key, label] of Object.entries(sections)) {
+    const secs = { revenus: "Revenus", factures: "Factures", depenses: "Dépenses", epargne: "Épargne", dettes: "Dettes" };
+    for (const [key, label] of Object.entries(secs)) {
       for (const item of data[key]) {
         const reel = item.type === "detail"
           ? (item.logs || []).reduce((s, l) => s + Number(l.amount), 0)
@@ -931,28 +910,34 @@ export default function App() {
     const solde = calcSolde(data);
     rows.push(["", "SOLDE PRÉVISIONNEL", solde.budget, ""]);
     rows.push(["", "SOLDE RÉEL", "", solde.reel]);
-
     const csv = rows.map((r) => r.map((c) => `"${c}"`).join(",")).join("\n");
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
+    const a = document.createElement("a"); a.href = url;
     a.download = `budget_${year}_${String(month + 1).padStart(2, "0")}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
+    a.click(); URL.revokeObjectURL(url);
   }
 
-  const ctx = { data, year, month, updateItem, addItem, deleteItem, resetMonth, exportCSV };
+  // ── Loading screen ──────────────────────────────────────────────────────────
+  if (!data) {
+    return (
+      <>
+        <style>{css}</style>
+        <div className="loading-screen">
+          <div className="spinner" />
+          <div className="loading-text">Chargement de {MONTHS_FR[month]} {year}…</div>
+        </div>
+      </>
+    );
+  }
+
+  const ctx = { data, year, month, updateItem, addItem, deleteItem, resetMonth, exportCSV, syncStatus };
 
   const renderPage = () => {
     if (tab === "dashboard") return <div className="page"><Dashboard /></div>;
     if (tab === "depenses") return <DepensesPage />;
-    const sectionMap = { revenus: "revenus", factures: "factures", epargne: "epargne", dettes: "dettes" };
-    return (
-      <div className="page">
-        <SectionPage title={tab} sectionKey={sectionMap[tab]} showType={false} />
-      </div>
-    );
+    const map = { revenus: "revenus", factures: "factures", epargne: "epargne", dettes: "dettes" };
+    return <div className="page"><SectionPage sectionKey={map[tab]} showType={false} /></div>;
   };
 
   return (
@@ -960,7 +945,6 @@ export default function App() {
       <style>{css}</style>
       <AppCtx.Provider value={ctx}>
         <div className="app">
-          {/* MONTH BAR */}
           <div className="month-bar">
             <button className="month-nav-btn" onClick={() => changeMonth(-1)}>‹</button>
             <span className="month-label">{MONTHS_FR[month]} {year}</span>
@@ -969,14 +953,9 @@ export default function App() {
 
           {renderPage()}
 
-          {/* BOTTOM NAV */}
           <nav className="bottom-nav">
             {TABS.map((t) => (
-              <button
-                key={t.key}
-                className={`nav-item${tab === t.key ? " active" : ""}`}
-                onClick={() => setTab(t.key)}
-              >
+              <button key={t.key} className={`nav-item${tab === t.key ? " active" : ""}`} onClick={() => setTab(t.key)}>
                 {t.icon}
                 <span>{t.label}</span>
                 <div className="nav-dot" />
