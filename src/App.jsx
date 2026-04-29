@@ -53,14 +53,35 @@ const css = `
     -webkit-overflow-scrolling: touch;
   }
 
+  /* APP HEADER — absorbs iPhone notch via safe-area-inset-top */
+  .app-header {
+    background: var(--bg2);
+    border-bottom: 1px solid var(--border);
+    padding-top: env(safe-area-inset-top);
+    flex-shrink: 0;
+  }
+  .app-title-bar {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 10px 16px 6px;
+  }
+  .app-title {
+    font-family: var(--font-head);
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+  .app-title span { color: var(--accent); }
+
   .month-bar {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 16px 16px 8px;
-    background: var(--bg);
-    border-bottom: 1px solid var(--border);
-    flex-shrink: 0;
+    padding: 10px 16px 10px;
+    background: var(--bg2);
   }
   .month-label {
     font-family: var(--font-head);
@@ -82,6 +103,34 @@ const css = `
     transition: background 0.15s;
   }
   .month-nav-btn:active { background: var(--accent); }
+
+  /* INHERIT BANNER */
+  .inherit-banner {
+    background: rgba(108,99,255,0.1);
+    border: 1px solid rgba(108,99,255,0.25);
+    border-radius: 12px;
+    padding: 12px 14px;
+    margin-bottom: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+  }
+  .inherit-banner-text { font-size: 12px; color: var(--muted); flex: 1; line-height: 1.4; }
+  .inherit-banner-text strong { color: var(--text); display: block; margin-bottom: 2px; font-size: 13px; }
+  .btn-inherit {
+    background: var(--accent);
+    color: #fff;
+    border: none;
+    font-family: var(--font-head);
+    font-size: 11px;
+    font-weight: 700;
+    padding: 8px 12px;
+    border-radius: 8px;
+    cursor: pointer;
+    white-space: nowrap;
+    letter-spacing: 0.04em;
+  }
 
   /* SYNC STATUS */
   .sync-dot {
@@ -242,7 +291,7 @@ const css = `
     border: 1px solid var(--border);
     color: var(--text);
     font-family: var(--font-body);
-    font-size: 14px;
+    font-size: 16px; /* ≥16px prevents Safari auto-zoom on focus */
     font-weight: 500;
     text-align: right;
     width: 80px;
@@ -257,7 +306,7 @@ const css = `
     border: 1px solid var(--border);
     color: var(--text);
     font-family: var(--font-body);
-    font-size: 13px;
+    font-size: 16px; /* ≥16px prevents Safari auto-zoom on focus */
     flex: 1;
     padding: 8px 10px;
     border-radius: 8px;
@@ -530,12 +579,24 @@ const Icons = {
 
 // ─── SECTION PAGE ─────────────────────────────────────────────────────────────
 function SectionPage({ sectionKey, showType, onDetailOpen }) {
-  const { data, updateItem, addItem, deleteItem } = useApp();
+  const { data, updateItem, addItem, deleteItem, isNewMonth, prevMonthKey, inheritPrev } = useApp();
   const items = data[sectionKey] || [];
   const { budget: totalB, reel: totalR } = sumSection(items);
 
   return (
     <div className="fade-up">
+      {/* INHERIT BANNER — shown only on blank new months */}
+      {isNewMonth && prevMonthKey && (
+        <div className="inherit-banner">
+          <div className="inherit-banner-text">
+            <strong>Nouveau mois</strong>
+            Copier le prévisionnel de {prevMonthKey} ?
+          </div>
+          <button className="btn-inherit" onClick={inheritPrev}>
+            Copier ↗
+          </button>
+        </div>
+      )}
       <div className="totals-bar">
         <div className="totals-col">
           <div className="totals-val">{fmt(totalB)}</div>
@@ -803,12 +864,12 @@ function DepensesPage() {
 
 // ─── TABS ─────────────────────────────────────────────────────────────────────
 const TABS = [
-  { key: "dashboard", label: "Tableau", icon: Icons.dashboard },
-  { key: "revenus", label: "Revenus", icon: Icons.revenus },
-  { key: "factures", label: "Factures", icon: Icons.factures },
-  { key: "depenses", label: "Dépenses", icon: Icons.depenses },
-  { key: "epargne", label: "Épargne", icon: Icons.epargne },
-  { key: "dettes", label: "Dettes", icon: Icons.dettes },
+  { key: "dashboard", label: "Tableau",  icon: Icons.dashboard },
+  { key: "revenus",   label: "Revenus",  icon: Icons.revenus   },
+  { key: "dettes",    label: "Dettes",   icon: Icons.dettes    },
+  { key: "factures",  label: "Factures", icon: Icons.factures  },
+  { key: "depenses",  label: "Dépenses", icon: Icons.depenses  },
+  { key: "epargne",   label: "Épargne",  icon: Icons.epargne   },
 ];
 
 // ─── MAIN APP ─────────────────────────────────────────────────────────────────
@@ -819,16 +880,25 @@ export default function App() {
   const [tab, setTab] = useState("dashboard");
   const [data, setData] = useState(null); // null = loading
   const [syncStatus, setSyncStatus] = useState("ok"); // ok | pending | error
+  const [isNewMonth, setIsNewMonth] = useState(false); // true when month has no existing data
+  const [prevMonthKey, setPrevMonthKey] = useState(null); // key of previous month for inherit
   const saveTimer = useRef(null);
 
   // ── Load on mount and month change ─────────────────────────────────────────
   async function loadData(y, m) {
     setData(null); // show spinner
+    setIsNewMonth(false);
+
+    // Compute previous month key for inherit banner
+    const prevM = m === 0 ? 11 : m - 1;
+    const prevY = m === 0 ? y - 1 : y;
+    setPrevMonthKey(toKey(prevY, prevM));
+
     // 1. Try Supabase first
     try {
       const remote = await dbLoad(y, m);
       if (remote) {
-        localSave(y, m, remote); // update local cache
+        localSave(y, m, remote);
         setData(remote);
         setSyncStatus("ok");
         return;
@@ -839,7 +909,37 @@ export default function App() {
     }
     // 2. Fallback: localStorage
     const local = localLoad(y, m);
-    setData(local || createMonth());
+    if (local) {
+      setData(local);
+    } else {
+      setData(createMonth());
+      setIsNewMonth(true); // blank month — offer inherit
+    }
+  }
+
+  // ── Inherit previsionnel from previous month ────────────────────────────────
+  async function inheritPrev() {
+    const prevM = month === 0 ? 11 : month - 1;
+    const prevY = month === 0 ? year - 1 : year;
+
+    let prev = null;
+    try { prev = await dbLoad(prevY, prevM); } catch (e) {}
+    if (!prev) prev = localLoad(prevY, prevM);
+    if (!prev) return;
+
+    // Copy only label + budget (prévisionnel), reset reel & logs
+    const sections = ["revenus", "factures", "depenses", "epargne", "dettes"];
+    const inherited = createMonth();
+    for (const sec of sections) {
+      inherited[sec] = prev[sec].map((item) => ({
+        ...item,
+        reel: 0,
+        logs: [],
+        id: item.id, // keep same ids so structure is stable
+      }));
+    }
+    setData(inherited);
+    setIsNewMonth(false);
   }
 
   useEffect(() => { loadData(year, month); }, [year, month]);
@@ -931,7 +1031,7 @@ export default function App() {
     );
   }
 
-  const ctx = { data, year, month, updateItem, addItem, deleteItem, resetMonth, exportCSV, syncStatus };
+  const ctx = { data, year, month, updateItem, addItem, deleteItem, resetMonth, exportCSV, syncStatus, isNewMonth, prevMonthKey, inheritPrev };
 
   const renderPage = () => {
     if (tab === "dashboard") return <div className="page"><Dashboard /></div>;
@@ -945,10 +1045,16 @@ export default function App() {
       <style>{css}</style>
       <AppCtx.Provider value={ctx}>
         <div className="app">
-          <div className="month-bar">
-            <button className="month-nav-btn" onClick={() => changeMonth(-1)}>‹</button>
-            <span className="month-label">{MONTHS_FR[month]} {year}</span>
-            <button className="month-nav-btn" onClick={() => changeMonth(1)}>›</button>
+          {/* FIXED HEADER: title bar + month selector — handles notch via safe-area */}
+          <div className="app-header">
+            <div className="app-title-bar">
+              <span className="app-title">Budget<span> Tracker</span></span>
+            </div>
+            <div className="month-bar">
+              <button className="month-nav-btn" onClick={() => changeMonth(-1)}>‹</button>
+              <span className="month-label">{MONTHS_FR[month]} {year}</span>
+              <button className="month-nav-btn" onClick={() => changeMonth(1)}>›</button>
+            </div>
           </div>
 
           {renderPage()}
