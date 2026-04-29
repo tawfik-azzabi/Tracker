@@ -282,12 +282,15 @@ const css = `
     border-radius: 12px;
     padding: 10px 12px;
     display: flex;
-    align-items: center; /* vertical center for all children */
+    align-items: flex-end; /* align on bottom edge so input fields line up */
     gap: 8px;
     position: relative;
     transition: transform 0.2s ease;
     touch-action: pan-y;
     will-change: transform;
+  }
+  .row-item .label-input {
+    margin-bottom: 0; /* sits at same baseline as amount inputs */
   }
   .row-item.swiped { transform: translateX(-72px); }
 
