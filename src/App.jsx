@@ -306,7 +306,12 @@ const css = `
     border: 1px solid var(--border);
     color: var(--text);
     font-family: var(--font-body);
-    font-size: 16px; /* ≥16px prevents Safari auto-zoom on focus */
+    /* Visually 13px but rendered at 16px then scaled down to avoid Safari zoom */
+    font-size: 16px;
+    transform: scale(0.8125); /* 13/16 = 0.8125 */
+    transform-origin: left center;
+    width: calc(100% / 0.8125); /* compensate for scale shrinkage */
+    margin-right: calc(-100% * (1 - 0.8125) / 0.8125);
     flex: 1;
     padding: 8px 10px;
     border-radius: 8px;
