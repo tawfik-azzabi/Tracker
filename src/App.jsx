@@ -979,14 +979,17 @@ export default function App() {
         setData(remote);
         setSyncStatus("ok");
         return;
+      } else {
+        // Month doesn't exist in Supabase — clear stale local cache if any
+        localStorage.removeItem(`budget_${toKey(y, m)}`);
       }
     } catch (e) {
       console.warn("Supabase load failed, falling back to local:", e);
       setSyncStatus("error");
     }
-    // 2. Fallback: localStorage
+    // 2. Fallback: localStorage (only trusted if Supabase failed, not if it returned null)
     const local = localLoad(y, m);
-    if (local) {
+    if (local && syncStatus === "error") {
       setData(local);
     } else {
       setData(createMonth());
