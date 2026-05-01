@@ -489,6 +489,66 @@ const css = `
   }
   .fade-up { animation: fadeUp 0.25s ease both; }
   .empty { text-align: center; color: var(--muted); padding: 32px 0; font-size: 13px; }
+
+  /* ── GAUGE ── */
+  .gauge-wrap { margin-top: 5px; display: flex; align-items: center; gap: 6px; }
+  .gauge-track { flex: 1; height: 4px; background: var(--bg3); border-radius: 2px; overflow: hidden; }
+  .gauge-fill { height: 100%; border-radius: 2px; transition: width 0.3s ease; }
+  .gauge-pct { font-size: 10px; font-weight: 600; min-width: 30px; text-align: right; flex-shrink: 0; }
+
+  /* ── ALERT BANNER ── */
+  .alert-banner {
+    background: rgba(247,183,49,0.1);
+    border: 1px solid rgba(247,183,49,0.3);
+    border-radius: 12px;
+    padding: 12px 14px;
+    margin-bottom: 14px;
+    display: flex; align-items: flex-start; gap: 10px;
+  }
+  .alert-banner-icon { font-size: 18px; flex-shrink: 0; line-height: 1.2; }
+  .alert-banner-body { flex: 1; }
+  .alert-banner-title {
+    font-family: var(--font-head); font-size: 12px; font-weight: 700;
+    color: var(--yellow); margin-bottom: 3px;
+    text-transform: uppercase; letter-spacing: 0.06em;
+  }
+  .alert-banner-items { font-size: 12px; color: var(--muted); line-height: 1.6; }
+
+  /* ── PROJECTION CARD (Dashboard) ── */
+  .proj-card {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 14px; margin-bottom: 12px;
+  }
+  .proj-card-title {
+    font-family: var(--font-head); font-size: 11px; font-weight: 700;
+    text-transform: uppercase; letter-spacing: 0.1em; color: var(--muted); margin-bottom: 10px;
+  }
+  .proj-row {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 7px 0; border-bottom: 1px solid var(--border); gap: 8px;
+  }
+  .proj-row:last-child { border-bottom: none; }
+  .proj-row-label { font-size: 13px; flex: 1; }
+  .proj-row-val { font-family: var(--font-head); font-size: 13px; font-weight: 700; text-align: right; }
+  .proj-row-pct { font-size: 11px; font-weight: 600; padding: 2px 7px; border-radius: 20px; flex-shrink: 0; }
+
+  /* ── PROJECTION INLINE (Detail page) ── */
+  .proj-inline {
+    margin-top: 8px; padding-top: 8px;
+    border-top: 1px solid rgba(255,255,255,0.07);
+    display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  }
+  .proj-inline-label { font-size: 11px; color: var(--muted); }
+  .proj-inline-val { font-family: var(--font-head); font-size: 14px; font-weight: 700; }
+  .proj-inline-pct { font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 20px; }
+
+  /* ── NAV BADGE ── */
+  .nav-item-wrap { position: relative; display: flex; flex-direction: column; align-items: center; flex: 1; }
+  .nav-badge {
+    position: absolute; top: 2px; right: calc(50% - 18px);
+    width: 7px; height: 7px;
+    background: var(--red); border-radius: 50%; border: 1.5px solid var(--bg2);
+  }
 `;
 
 // ─── DATA MODEL ────────────────────────────────────────────────────────────────
@@ -604,7 +664,40 @@ function calcSolde(data) {
   };
 }
 
-// ─── ICONS ────────────────────────────────────────────────────────────────────
+// ─── PROJECTION HELPER ────────────────────────────────────────────────────────
+// Returns projection data for a detail-type depense item
+// Needs at least 3 elapsed days with 1+ log to be reliable
+function calcProjection(item, year, month) {
+  if (item.type !== "detail") return null;
+  const logs = item.logs || [];
+  if (logs.length === 0) return null;
+
+  const now = new Date();
+  const isCurrentMonth = now.getFullYear() === year && now.getMonth() === month;
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+
+  // For past months use full month, for current use elapsed days
+  const today = isCurrentMonth ? now.getDate() : daysInMonth;
+  if (today < 3) return { insufficient: true };
+
+  const total = logs.reduce((s, l) => s + (Number(l.amount) || 0), 0);
+  if (total === 0) return null;
+
+  const dailyRate = total / today;
+  const projected = Math.round(dailyRate * daysInMonth);
+  const budget = Number(item.budget) || 0;
+  const pct = budget > 0 ? Math.round((projected / budget) * 100) : null;
+  const overBudget = budget > 0 && projected > budget;
+
+  return { projected, budget, pct, overBudget, insufficient: false };
+}
+
+// Gauge color based on consumption %
+function gaugeColor(pct) {
+  if (pct >= 100) return "var(--red)";
+  if (pct >= 80)  return "var(--yellow)";
+  return "var(--green)";
+}
 const Icons = {
   dashboard: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>,
   revenus: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>,
@@ -615,6 +708,21 @@ const Icons = {
   back: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><path d="M19 12H5M5 12l7-7M5 12l7 7"/></svg>,
   trash: "×",
 };
+
+// ─── GAUGE COMPONENT ──────────────────────────────────────────────────────────
+function Gauge({ reel, budget }) {
+  if (!budget || budget === 0) return null;
+  const pct = Math.min(Math.round((reel / budget) * 100), 100);
+  const color = gaugeColor(Math.round((reel / budget) * 100));
+  return (
+    <div className="gauge-wrap">
+      <div className="gauge-track">
+        <div className="gauge-fill" style={{ width: `${pct}%`, background: color }} />
+      </div>
+      <span className="gauge-pct" style={{ color }}>{Math.round((reel / budget) * 100)}%</span>
+    </div>
+  );
+}
 
 // ─── SWIPEABLE ROW ────────────────────────────────────────────────────────────
 function SwipeRow({ onDelete, children }) {
@@ -702,12 +810,16 @@ function SectionPage({ sectionKey, showType, onDetailOpen }) {
 
         return (
           <SwipeRow key={item.id} onDelete={() => deleteItem(sectionKey, item.id)}>
-            <input
-              className="label-input"
-              value={item.label}
-              onChange={(e) => updateItem(sectionKey, item.id, { label: e.target.value })}
-              placeholder="Intitulé"
-            />
+            <div style={{ flex: 1, minWidth: 0, display: "flex", flexDirection: "column", gap: 0 }}>
+              <input
+                className="label-input"
+                style={{ width: "100%" }}
+                value={item.label}
+                onChange={(e) => updateItem(sectionKey, item.id, { label: e.target.value })}
+                placeholder="Intitulé"
+              />
+              <Gauge reel={reelVal} budget={Number(item.budget)} />
+            </div>
             <div className="input-group">
               <span className="input-micro-label">Prévu</span>
               <input
@@ -758,7 +870,7 @@ function SectionPage({ sectionKey, showType, onDetailOpen }) {
 
 // ─── DETAIL PAGE ──────────────────────────────────────────────────────────────
 function DetailPage({ item, onBack }) {
-  const { updateItem } = useApp();
+  const { updateItem, year, month } = useApp();
   const sectionKey = "depenses";
   const [desc, setDesc] = useState("");
   const [amount, setAmount] = useState("");
@@ -766,6 +878,7 @@ function DetailPage({ item, onBack }) {
 
   const logs = item.logs || [];
   const total = logs.reduce((s, l) => s + (Number(l.amount) || 0), 0);
+  const proj = calcProjection(item, year, month);
 
   function addLog() {
     if (!amount) return;
@@ -795,6 +908,28 @@ function DetailPage({ item, onBack }) {
             {fmt(Number(item.budget) - total)}
           </span>
         </div>
+        {/* PROJECTION INLINE */}
+        {proj && !proj.insufficient && (
+          <div className="proj-inline">
+            <span className="proj-inline-label">Projection fin de mois</span>
+            <span className="proj-inline-val" style={{ color: proj.overBudget ? "var(--red)" : "var(--green)" }}>
+              {fmt(proj.projected)}
+            </span>
+            {proj.pct !== null && (
+              <span className="proj-inline-pct" style={{
+                background: proj.overBudget ? "rgba(255,107,107,0.15)" : "rgba(67,233,123,0.15)",
+                color: proj.overBudget ? "var(--red)" : "var(--green)"
+              }}>
+                {proj.pct}%
+              </span>
+            )}
+          </div>
+        )}
+        {proj?.insufficient && (
+          <div style={{ fontSize: 11, color: "var(--muted)", marginTop: 6, fontStyle: "italic" }}>
+            Données insuffisantes pour projeter
+          </div>
+        )}
       </div>
 
       <div className="add-log-form">
@@ -828,13 +963,22 @@ function DetailPage({ item, onBack }) {
 
 // ─── DASHBOARD ────────────────────────────────────────────────────────────────
 function Dashboard() {
-  const { data, exportCSV, resetMonth, syncStatus } = useApp();
+  const { data, exportCSV, resetMonth, syncStatus, year, month } = useApp();
   const rev = sumSection(data.revenus);
   const fac = sumSection(data.factures);
   const dep = sumSection(data.depenses);
   const epa = sumSection(data.epargne);
   const det = sumSection(data.dettes);
   const solde = calcSolde(data);
+
+  // Compute projections for all detail depenses
+  const projections = data.depenses
+    .filter((i) => i.type === "detail")
+    .map((i) => ({ item: i, proj: calcProjection(i, year, month) }))
+    .filter((r) => r.proj && !r.proj.insufficient)
+    .sort((a, b) => (b.proj.overBudget ? 1 : 0) - (a.proj.overBudget ? 1 : 0));
+
+  const tensionItems = projections.filter((r) => r.proj.overBudget);
 
   const sections = [
     { label: "Revenus", budget: rev.budget, reel: rev.reel, color: "var(--green)" },
@@ -853,6 +997,27 @@ function Dashboard() {
 
   return (
     <div className="fade-up">
+
+      {/* ALERT BANNER */}
+      {tensionItems.length > 0 && (
+        <div className="alert-banner">
+          <span className="alert-banner-icon">⚠️</span>
+          <div className="alert-banner-body">
+            <div className="alert-banner-title">
+              {tensionItems.length} rubrique{tensionItems.length > 1 ? "s" : ""} en tension
+            </div>
+            <div className="alert-banner-items">
+              {tensionItems.map((r) => (
+                <span key={r.item.id}>
+                  {r.item.label} → {fmt(r.proj.projected)} ({r.proj.pct}%){" "}
+                </span>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* SOLDE CARD */}
       <div className="solde-card">
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
           <div>
@@ -877,6 +1042,7 @@ function Dashboard() {
         </div>
       </div>
 
+      {/* SUMMARY CARDS */}
       <div className="dash-grid">
         {sections.slice(0, 4).map((s) => (
           <div className="dash-card" key={s.label}>
@@ -895,6 +1061,30 @@ function Dashboard() {
         <div className="dash-card-prev">Prévu {fmt(det.budget)}</div>
       </div>
 
+      {/* PROJECTION CARD */}
+      {projections.length > 0 && (
+        <div className="proj-card">
+          <div className="proj-card-title">📈 Projections fin de mois</div>
+          {projections.map(({ item, proj }) => (
+            <div className="proj-row" key={item.id}>
+              <span className="proj-row-label">{item.label}</span>
+              <span className="proj-row-val" style={{ color: proj.overBudget ? "var(--red)" : "var(--green)" }}>
+                {fmt(proj.projected)}
+              </span>
+              {proj.pct !== null && (
+                <span className="proj-row-pct" style={{
+                  background: proj.overBudget ? "rgba(255,107,107,0.15)" : "rgba(67,233,123,0.15)",
+                  color: proj.overBudget ? "var(--red)" : "var(--green)"
+                }}>
+                  {proj.pct}%
+                </span>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* BAR CHART */}
       <div className="card chart-wrap">
         <div className="chart-title">Prévisionnel vs Réel</div>
         {sections.map((s) => (
@@ -1113,6 +1303,21 @@ export default function App() {
 
   const ctx = { data, year, month, updateItem, addItem, deleteItem, resetMonth, exportCSV, syncStatus, isNewMonth, prevMonthKey, inheritPrev };
 
+  // Compute which tabs have overbudget items for badge display
+  const tabBadges = {
+    depenses: data.depenses.some((i) => {
+      const reel = i.type === "detail"
+        ? (i.logs || []).reduce((s, l) => s + Number(l.amount), 0)
+        : Number(i.reel) || 0;
+      return Number(i.budget) > 0 && reel > Number(i.budget);
+    }),
+    factures: data.factures.some((i) => Number(i.budget) > 0 && Number(i.reel) > Number(i.budget)),
+    revenus: false,
+    epargne: data.epargne.some((i) => Number(i.budget) > 0 && Number(i.reel) < Number(i.budget)),
+    dettes: data.dettes.some((i) => Number(i.budget) > 0 && Number(i.reel) > Number(i.budget)),
+    dashboard: false,
+  };
+
   const renderPage = () => {
     if (tab === "dashboard") return <div className="page"><Dashboard /></div>;
     if (tab === "depenses") return <DepensesPage />;
@@ -1141,11 +1346,14 @@ export default function App() {
 
           <nav className="bottom-nav">
             {TABS.map((t) => (
-              <button key={t.key} className={`nav-item${tab === t.key ? " active" : ""}`} onClick={() => setTab(t.key)}>
-                {t.icon}
-                <span>{t.label}</span>
-                <div className="nav-dot" />
-              </button>
+              <div key={t.key} className="nav-item-wrap">
+                {tabBadges[t.key] && <div className="nav-badge" />}
+                <button className={`nav-item${tab === t.key ? " active" : ""}`} style={{ flex: "none", width: "100%" }} onClick={() => setTab(t.key)}>
+                  {t.icon}
+                  <span>{t.label}</span>
+                  <div className="nav-dot" />
+                </button>
+              </div>
             ))}
           </nav>
         </div>
