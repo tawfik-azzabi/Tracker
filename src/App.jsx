@@ -568,10 +568,10 @@ const CATEGORIES_TEMPLATE = {
     { id: "f8", label: "Abonnements", budget: 0, reel: 0 },
   ],
   depenses: [
-    { id: "d1", label: "Starbucks", budget: 0, reel: 0, type: "detail", logs: [] },
-    { id: "d2", label: "Courses/Glovo", budget: 0, reel: 0, type: "detail", logs: [] },
-    { id: "d3", label: "Restaurants", budget: 0, reel: 0, type: "detail", logs: [] },
-    { id: "d4", label: "Vapes", budget: 0, reel: 0, type: "detail", logs: [] },
+    { id: "d1", label: "Starbucks", budget: 0, reel: 0, type: "recurrent", logs: [] },
+    { id: "d2", label: "Courses/Glovo", budget: 0, reel: 0, type: "recurrent", logs: [] },
+    { id: "d3", label: "Restaurants", budget: 0, reel: 0, type: "recurrent", logs: [] },
+    { id: "d4", label: "Vapes", budget: 0, reel: 0, type: "recurrent", logs: [] },
     { id: "d5", label: "Shopping", budget: 0, reel: 0, type: "simple" },
     { id: "d6", label: "Pressing / Lavage", budget: 0, reel: 0, type: "simple" },
     { id: "d7", label: "Lentilles", budget: 0, reel: 0, type: "simple" },
@@ -644,7 +644,8 @@ const MONTHS_FR = ["Janvier","Février","Mars","Avril","Mai","Juin","Juillet","A
 function sumSection(items) {
   const budget = items.reduce((s, i) => s + (Number(i.budget) || 0), 0);
   const reel = items.reduce((s, i) => {
-    const r = i.type === "detail"
+    const hasLogs = i.type === "recurrent" || i.type === "ponctuel" || i.type === "detail";
+    const r = hasLogs
       ? (i.logs || []).reduce((a, l) => a + (Number(l.amount) || 0), 0)
       : Number(i.reel) || 0;
     return s + r;
@@ -665,18 +666,15 @@ function calcSolde(data) {
 }
 
 // ─── PROJECTION HELPER ────────────────────────────────────────────────────────
-// Returns projection data for a detail-type depense item
-// Needs at least 3 elapsed days with 1+ log to be reliable
+// Only applies to type="recurrent". "ponctuel" and "detail" (legacy) show no projection.
 function calcProjection(item, year, month) {
-  if (item.type !== "detail") return null;
+  if (item.type !== "recurrent") return null;
   const logs = item.logs || [];
   if (logs.length === 0) return null;
 
   const now = new Date();
   const isCurrentMonth = now.getFullYear() === year && now.getMonth() === month;
   const daysInMonth = new Date(year, month + 1, 0).getDate();
-
-  // For past months use full month, for current use elapsed days
   const today = isCurrentMonth ? now.getDate() : daysInMonth;
   if (today < 3) return { insufficient: true };
 
@@ -803,10 +801,24 @@ function SectionPage({ sectionKey, showType, onDetailOpen }) {
       </div>
 
       {items.map((item) => {
-        const isDetail = item.type === "detail";
-        const reelVal = isDetail
+        const hasLogs = item.type === "recurrent" || item.type === "ponctuel" || item.type === "detail";
+        const reelVal = hasLogs
           ? (item.logs || []).reduce((s, l) => s + (Number(l.amount) || 0), 0)
           : Number(item.reel) || 0;
+
+        // Cycle: simple → recurrent → ponctuel → simple
+        function cycleType() {
+          const next = item.type === "simple" ? "recurrent"
+            : item.type === "recurrent" ? "ponctuel"
+            : "simple";
+          const patch = { type: next };
+          if (next === "simple") { patch.logs = undefined; patch.reel = 0; }
+          else if (!item.logs) { patch.logs = []; }
+          updateItem(sectionKey, item.id, patch);
+        }
+
+        const badgeLabel = item.type === "recurrent" ? "↻" : item.type === "ponctuel" ? "◎" : "·";
+        const badgeClass = item.type === "simple" ? "badge-simple" : "badge-detail";
 
         return (
           <SwipeRow key={item.id} onDelete={() => deleteItem(sectionKey, item.id)}>
@@ -832,7 +844,7 @@ function SectionPage({ sectionKey, showType, onDetailOpen }) {
             </div>
             <div className="input-group">
               <span className="input-micro-label">Réel</span>
-              {isDetail ? (
+              {hasLogs ? (
                 <button
                   className="amount-input"
                   style={{ cursor: "pointer", background: "rgba(108,99,255,0.1)", borderColor: "rgba(108,99,255,0.3)", color: "var(--accent)", textAlign: "right" }}
@@ -851,11 +863,12 @@ function SectionPage({ sectionKey, showType, onDetailOpen }) {
               )}
             </div>
             {showType && (
-              <button
-                className={`row-badge ${isDetail ? "badge-detail" : "badge-simple"}`}
-                onClick={() => updateItem(sectionKey, item.id, { type: isDetail ? "simple" : "detail", logs: isDetail ? undefined : [] })}
-              >
-                {isDetail ? "∑" : "·"}
+              <button className={`row-badge ${badgeClass}`} onClick={cycleType} title={
+                item.type === "simple" ? "Simple → Récurrente"
+                : item.type === "recurrent" ? "Récurrente → Ponctuelle"
+                : "Ponctuelle → Simple"
+              }>
+                {badgeLabel}
               </button>
             )}
           </SwipeRow>
@@ -971,9 +984,9 @@ function Dashboard() {
   const det = sumSection(data.dettes);
   const solde = calcSolde(data);
 
-  // Compute projections for all detail depenses
+  // Projections: only recurrent items
   const projections = data.depenses
-    .filter((i) => i.type === "detail")
+    .filter((i) => i.type === "recurrent")
     .map((i) => ({ item: i, proj: calcProjection(i, year, month) }))
     .filter((r) => r.proj && !r.proj.insufficient)
     .sort((a, b) => (b.proj.overBudget ? 1 : 0) - (a.proj.overBudget ? 1 : 0));
@@ -1087,22 +1100,35 @@ function Dashboard() {
       {/* BAR CHART */}
       <div className="card chart-wrap">
         <div className="chart-title">Prévisionnel vs Réel</div>
-        {sections.map((s) => (
-          <div className="bar-group" key={s.label}>
-            <div className="bar-label">
-              <span>{s.label}</span>
-              <span style={{ color: "var(--muted)" }}>{fmt(s.reel)} / {fmt(s.budget)}</span>
-            </div>
-            <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
-              <div className="bar-track">
-                <div className="bar-fill" style={{ width: `${(s.budget / maxVal) * 100}%`, background: "var(--border)", opacity: 0.6 }} />
+        {sections.map((s) => {
+          const pct = s.budget > 0 ? Math.round((s.reel / s.budget) * 100) : null;
+          const pctColor = pct === null ? "var(--muted)"
+            : s.label === "Revenus" ? (pct >= 100 ? "var(--green)" : "var(--yellow)")
+            : pct >= 100 ? "var(--red)" : pct >= 80 ? "var(--yellow)" : "var(--green)";
+          return (
+            <div className="bar-group" key={s.label}>
+              <div className="bar-label">
+                <span>{s.label}</span>
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <span style={{ color: "var(--muted)", fontSize: 11 }}>{fmt(s.reel)} / {fmt(s.budget)}</span>
+                  {pct !== null && (
+                    <span style={{ fontSize: 11, fontWeight: 700, color: pctColor, minWidth: 36, textAlign: "right" }}>
+                      {pct}%
+                    </span>
+                  )}
+                </div>
               </div>
-              <div className="bar-track">
-                <div className="bar-fill" style={{ width: `${(s.reel / maxVal) * 100}%`, background: s.color }} />
+              <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
+                <div className="bar-track">
+                  <div className="bar-fill" style={{ width: `${(s.budget / maxVal) * 100}%`, background: "var(--border)", opacity: 0.6 }} />
+                </div>
+                <div className="bar-track">
+                  <div className="bar-fill" style={{ width: `${Math.min((s.reel / maxVal) * 100, 100)}%`, background: s.color }} />
+                </div>
               </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
         <div style={{ display: "flex", gap: 16, marginTop: 10 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 11, color: "var(--muted)" }}>
             <div style={{ width: 20, height: 6, background: "var(--border)", borderRadius: 3 }} /> Prévisionnel
@@ -1306,7 +1332,8 @@ export default function App() {
   // Compute which tabs have overbudget items for badge display
   const tabBadges = {
     depenses: data.depenses.some((i) => {
-      const reel = i.type === "detail"
+      const hasLogs = i.type === "recurrent" || i.type === "ponctuel" || i.type === "detail";
+      const reel = hasLogs
         ? (i.logs || []).reduce((s, l) => s + Number(l.amount), 0)
         : Number(i.reel) || 0;
       return Number(i.budget) > 0 && reel > Number(i.budget);
