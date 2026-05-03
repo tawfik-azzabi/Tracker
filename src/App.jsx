@@ -644,9 +644,11 @@ const MONTHS_FR = ["Janvier","Février","Mars","Avril","Mai","Juin","Juillet","A
 function sumSection(items) {
   const budget = items.reduce((s, i) => s + (Number(i.budget) || 0), 0);
   const reel = items.reduce((s, i) => {
-    const hasLogs = i.type === "recurrent" || i.type === "ponctuel" || i.type === "detail";
-    const r = hasLogs
-      ? (i.logs || []).reduce((a, l) => a + (Number(l.amount) || 0), 0)
+    // Use logs if the item has them AND is not in simple mode
+    const useLogTotal = Array.isArray(i.logs) && i.logs.length > 0
+      && (i.type === "recurrent" || i.type === "ponctuel" || i.type === "detail");
+    const r = useLogTotal
+      ? i.logs.reduce((a, l) => a + (Number(l.amount) || 0), 0)
       : Number(i.reel) || 0;
     return s + r;
   }, 0);
@@ -801,10 +803,13 @@ function SectionPage({ sectionKey, showType, onDetailOpen }) {
       </div>
 
       {items.map((item) => {
-        const hasLogs = (item.type === "recurrent" || item.type === "ponctuel" || item.type === "detail")
-          && Array.isArray(item.logs);
-        const reelVal = hasLogs
-          ? (item.logs || []).reduce((s, l) => s + (Number(l.amount) || 0), 0)
+        // hasLogs = item actually has a logs array (regardless of current type)
+        // This preserves logs even if user switches to "simple" temporarily
+        const hasLogs = Array.isArray(item.logs) && (
+          item.type === "recurrent" || item.type === "ponctuel" || item.type === "detail"
+        );
+        const reelVal = Array.isArray(item.logs) && item.logs.length > 0
+          ? (item.logs).reduce((s, l) => s + (Number(l.amount) || 0), 0)
           : Number(item.reel) || 0;
 
         // Cycle: simple → recurrent → ponctuel → simple
@@ -1331,9 +1336,10 @@ export default function App() {
   // Compute which tabs have overbudget items for badge display
   const tabBadges = {
     depenses: data.depenses.some((i) => {
-      const hasLogs = i.type === "recurrent" || i.type === "ponctuel" || i.type === "detail";
-      const reel = hasLogs
-        ? (i.logs || []).reduce((s, l) => s + Number(l.amount), 0)
+      const useLogTotal = Array.isArray(i.logs) && i.logs.length > 0
+        && (i.type === "recurrent" || i.type === "ponctuel" || i.type === "detail");
+      const reel = useLogTotal
+        ? i.logs.reduce((s, l) => s + Number(l.amount), 0)
         : Number(i.reel) || 0;
       return Number(i.budget) > 0 && reel > Number(i.budget);
     }),
