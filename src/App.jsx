@@ -801,20 +801,19 @@ function SectionPage({ sectionKey, showType, onDetailOpen }) {
       </div>
 
       {items.map((item) => {
-        const hasLogs = item.type === "recurrent" || item.type === "ponctuel" || item.type === "detail";
+        const hasLogs = (item.type === "recurrent" || item.type === "ponctuel" || item.type === "detail")
+          && Array.isArray(item.logs);
         const reelVal = hasLogs
           ? (item.logs || []).reduce((s, l) => s + (Number(l.amount) || 0), 0)
           : Number(item.reel) || 0;
 
         // Cycle: simple → recurrent → ponctuel → simple
+        // NEVER erase logs or reel — only change the type label
         function cycleType() {
           const next = item.type === "simple" ? "recurrent"
             : item.type === "recurrent" ? "ponctuel"
             : "simple";
-          const patch = { type: next };
-          if (next === "simple") { patch.logs = undefined; patch.reel = 0; }
-          else if (!item.logs) { patch.logs = []; }
-          updateItem(sectionKey, item.id, patch);
+          updateItem(sectionKey, item.id, { type: next });
         }
 
         const badgeLabel = item.type === "recurrent" ? "↻" : item.type === "ponctuel" ? "◎" : "·";
