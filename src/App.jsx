@@ -1124,7 +1124,7 @@ function Dashboard() {
               </div>
               <div style={{ display: "flex", flexDirection: "column", gap: 3 }}>
                 <div className="bar-track">
-                  <div className="bar-fill" style={{ width: `${(s.budget / maxVal) * 100}%`, background: "var(--border)", opacity: 0.6 }} />
+                  <div className="bar-fill" style={{ width: `${(s.budget / maxVal) * 100}%`, background: "var(--muted)", opacity: 0.5 }} />
                 </div>
                 <div className="bar-track">
                   <div className="bar-fill" style={{ width: `${Math.min((s.reel / maxVal) * 100, 100)}%`, background: s.color }} />
