@@ -886,13 +886,15 @@ function SectionPage({ sectionKey, showType, onDetailOpen }) {
 }
 
 // ─── DETAIL PAGE ──────────────────────────────────────────────────────────────
-function DetailPage({ item, onBack }) {
-  const { updateItem, year, month } = useApp();
+function DetailPage({ itemId, onBack }) {
+  const { data, updateItem, year, month } = useApp();
   const sectionKey = "depenses";
   const [desc, setDesc] = useState("");
   const [amount, setAmount] = useState("");
   const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
 
+  // Read item live from context — updates instantly when logs change
+  const item = data[sectionKey].find((i) => i.id === itemId) || {};
   const logs = item.logs || [];
   const total = logs.reduce((s, l) => s + (Number(l.amount) || 0), 0);
   const proj = calcProjection(item, year, month);
@@ -1148,13 +1150,13 @@ function Dashboard() {
 
 // ─── DEPENSES PAGE ─────────────────────────────────────────────────────────────
 function DepensesPage() {
-  const [detailItem, setDetailItem] = useState(null);
-  if (detailItem) {
-    return <div className="page"><DetailPage item={detailItem} onBack={() => setDetailItem(null)} /></div>;
+  const [detailItemId, setDetailItemId] = useState(null);
+  if (detailItemId) {
+    return <div className="page"><DetailPage itemId={detailItemId} onBack={() => setDetailItemId(null)} /></div>;
   }
   return (
     <div className="page">
-      <SectionPage sectionKey="depenses" showType={true} onDetailOpen={(item) => setDetailItem(item)} />
+      <SectionPage sectionKey="depenses" showType={true} onDetailOpen={(item) => setDetailItemId(item.id)} />
     </div>
   );
 }
